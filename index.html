@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>인터벌 타이머</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#101314">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="인터벌">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #101314;
+    --surface: #1B2022;
+    --surface-2: #23292b;
+    --work: #FF4433;
+    --work-deep: #2b120f;
+    --rest: #38B6FF;
+    --rest-deep: #0c2430;
+    --text: #F2F0EB;
+    --muted: #8B9296;
+    --border: rgba(242,240,235,0.08);
+  }
+  *{ box-sizing: border-box; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow Condensed', sans-serif;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  #app{
+    height:100vh;
+    height:100dvh;
+    display:flex;
+    flex-direction:column;
+    transition: background-color 0.6s ease;
+    overflow:hidden;
+  }
+  @media (prefers-reduced-motion: reduce){
+    #app{ transition:none; }
+  }
+
+  /* ---------- shared ---------- */
+  .screen{ display:flex; flex-direction:column; height:100%; }
+  .hidden{ display:none !important; }
+  .row{ display:flex; align-items:center; }
+  .spacer{ flex:1; }
+
+  button{
+    font-family:inherit;
+    border:none;
+    cursor:pointer;
+    color:var(--text);
+  }
+  .icon-btn{
+    background:none;
+    width:44px; height:44px;
+    display:flex; align-items:center; justify-content:center;
+    border-radius:50%;
+    color: var(--muted);
+  }
+  .icon-btn:focus-visible, button:focus-visible, input:focus-visible{
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
+
+  /* ---------- HOME ---------- */
+  #home{ padding: 20px 20px 16px; }
+  .top-bar{ justify-content:space-between; }
+  .wordmark{
+    font-weight:700; font-size: 20px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .home-scroll{ flex:1; overflow-y:auto; padding-bottom: 8px; }
+  .stat-chip{
+    background: var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding: 12px 18px;
+    text-align:center;
+    min-width: 84px;
+  }
+  .stat-chip .num{
+    font-family:'Space Mono', monospace;
+    font-size: 26px; font-weight:700; font-variant-numeric: tabular-nums;
+  }
+  .stat-chip .lbl{
+    font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; margin-top:2px;
+  }
+  .total-display{
+    margin-top: 22px; text-align:center;
+    background: var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding: 16px;
+  }
+  .total-display-lbl{
+    font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; font-weight:600;
+  }
+  .total-display-val{
+    font-family:'Space Mono', monospace; font-size:32px; font-weight:700;
+    font-variant-numeric: tabular-nums; margin-top:4px; color: var(--work);
+  }
+  .start-wrap{ padding: 12px 4px 4px; }
+  #startBtn{
+    width: 100%;
+    background: linear-gradient(180deg, var(--work), #d6321f);
+    color:#fff;
+    font-family:'Barlow Condensed', sans-serif;
+    font-weight:700;
+    font-size: 26px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 22px;
+    border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(255,68,51,0.25);
+  }
+  #startBtn:active{ transform: scale(0.98); }
+
+  /* ---------- RUNNING ---------- */
+  #run{ justify-content:space-between; padding: 20px 20px 28px; }
+  .progress-track{
+    width:100%; height:6px; background: var(--border); border-radius: 999px; overflow:hidden;
+  }
+  .progress-fill{
+    height:100%; width:100%;
+    background: var(--text);
+    transform-origin: left;
+    transition: transform 1s linear, background-color 0.4s ease;
+  }
+  .run-header{ justify-content:space-between; margin-top:14px; }
+  .round-label{
+    font-family:'Space Mono', monospace;
+    font-size:14px; color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+  .phase-label{
+    text-align:center; text-transform:uppercase; letter-spacing:0.2em;
+    font-weight:700; font-size: 20px; margin-top: 6px;
+  }
+  .timer-wrap{ flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column; }
+  .timer-num{
+    font-family:'Space Mono', monospace;
+    font-size: min(28vw, 168px);
+    font-weight:700;
+    font-variant-numeric: tabular-nums;
+    line-height:1;
+  }
+  .next-up{ color: var(--muted); font-size:16px; margin-top: 8px; letter-spacing:0.05em; }
+  .total-time-label{ text-align:center; color: var(--muted); font-size:13px; font-family:'Space Mono', monospace; margin-top:2px; }
+  .metro-bar{
+    justify-content:space-between;
+    background: var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding: 10px 12px; margin-bottom: 14px;
+  }
+  .metro-bar .metro-toggle{
+    width:40px; height:40px; border-radius:12px;
+    background: var(--surface-2); color: var(--muted);
+    display:flex; align-items:center; justify-content:center; font-size:18px;
+  }
+  .metro-bar .metro-toggle.on{ background: rgba(56,182,255,0.2); color: var(--rest); }
+  .metro-bar .bpm-control{ display:flex; align-items:center; gap:10px; }
+  .metro-bar .mini-step-btn{
+    width:36px; height:36px; border-radius:10px; background:var(--surface-2);
+    font-size:18px; font-weight:700; color:var(--text);
+  }
+  .metro-bar .bpm-readout{ text-align:center; min-width:64px; }
+  .metro-bar .bpm-val{ font-family:'Space Mono', monospace; font-size:20px; font-weight:700; font-variant-numeric: tabular-nums; }
+  .metro-bar .bpm-unit{ font-size:11px; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; display:block; }
+  .controls{ display:flex; gap:14px; }
+  .ctrl-btn{
+    flex:1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    font-size: 18px;
+    font-weight:600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .ctrl-btn.danger{ color: #ffb3ab; }
+
+  /* ---------- SETTINGS ---------- */
+  #settings{ padding: 20px 20px 28px; overflow-y:auto; }
+  .settings-title{ font-size: 22px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; }
+  .field-group{ margin-top: 26px; }
+  .field-label{
+    font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; font-weight:600;
+    margin-bottom: 10px;
+  }
+  .stepper{
+    display:flex; align-items:center; gap:0;
+    background: var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden;
+  }
+  .stepper button{
+    background:var(--surface-2);
+    width: 52px; height: 56px;
+    font-size: 24px; font-weight:700;
+    color: var(--text);
+  }
+  .stepper .val{
+    flex:1; text-align:center;
+    font-family:'Space Mono', monospace;
+    font-size: 24px; font-weight:700; font-variant-numeric: tabular-nums;
+  }
+  .toggle-row{
+    justify-content:space-between;
+    background: var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding: 14px 18px; margin-top: 12px;
+  }
+  .toggle-row .lbl-main{ font-size:17px; font-weight:600; }
+  .toggle-row .lbl-sub{ font-size:13px; color:var(--muted); margin-top:2px; }
+  .switch{
+    position:relative; width:50px; height:30px; border-radius:999px;
+    background: var(--surface-2); border:1px solid var(--border); flex-shrink:0;
+  }
+  .switch .knob{
+    position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%;
+    background: var(--muted); transition: transform 0.2s ease, background-color 0.2s ease;
+  }
+  .switch.on{ background: rgba(56,182,255,0.25); border-color: var(--rest); }
+  .switch.on .knob{ transform: translateX(20px); background: var(--rest); }
+  .done-btn{
+    margin-top: 30px; width:100%;
+    background: var(--surface); border:1px solid var(--border);
+    border-radius: 16px; padding: 16px;
+    font-weight:700; font-size:18px; text-transform:uppercase; letter-spacing:0.06em;
+  }
+  .save-hint{ text-align:center; color:var(--muted); font-size:13px; margin-top:14px; min-height:16px; }
+
+  /* ---------- HISTORY ---------- */
+  #history{ padding: 20px 20px 24px; overflow-y:auto; }
+  .segmented{
+    display:flex; margin-top:20px;
+    background: var(--surface); border:1px solid var(--border); border-radius: 14px; padding:4px;
+  }
+  .seg-btn{
+    flex:1; background:transparent; border-radius:10px; padding:10px 0;
+    font-size:15px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em;
+  }
+  .seg-btn.active{ background: var(--surface-2); color: var(--text); }
+  .hist-nav{ justify-content:space-between; margin-top:18px; }
+  .hist-range-label{
+    font-family:'Space Mono', monospace; font-size:15px; color:var(--text); letter-spacing:0.02em;
+  }
+  .hist-totals{
+    display:flex; gap:12px; margin-top:14px; flex-wrap:wrap;
+  }
+  .hist-totals .stat-chip{ flex:1; min-width:80px; }
+  .chart-wrap{
+    margin-top:20px; background: var(--surface); border:1px solid var(--border);
+    border-radius:16px; padding: 14px 10px 8px;
+  }
+  .hist-table-wrap{ margin-top:18px; }
+  .hist-table{ width:100%; border-collapse:collapse; }
+  .hist-table th{
+    text-align:left; font-size:12px; color:var(--muted); text-transform:uppercase;
+    letter-spacing:0.08em; font-weight:600; padding: 6px 8px; border-bottom:1px solid var(--border);
+  }
+  .hist-table td{
+    font-family:'Space Mono', monospace; font-size:14px; padding: 10px 8px;
+    border-bottom:1px solid var(--border);
+  }
+  .hist-table td.date-cell{ font-family:'Barlow Condensed', sans-serif; font-size:15px; font-weight:600; }
+  .hist-table tr.empty-day td{ color: var(--muted); }
+  .hist-table tr.today-row td{ color: var(--rest); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HOME SCREEN -->
+  <div id="home" class="screen">
+    <div class="row top-bar">
+      <span class="wordmark">인터벌</span>
+      <button class="icon-btn" id="historyOpenBtn" aria-label="운동 기록">📊</button>
+    </div>
+
+    <div class="home-scroll">
+      <div class="field-group" style="margin-top:8px;">
+        <div class="field-label">운동 시간 (초)</div>
+        <div class="stepper">
+          <button data-step="work" data-delta="-5">−</button>
+          <div class="val" id="workVal">30</div>
+          <button data-step="work" data-delta="5">+</button>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <div class="field-label">휴식 시간 (초)</div>
+        <div class="stepper">
+          <button data-step="rest" data-delta="-5">−</button>
+          <div class="val" id="restVal">15</div>
+          <button data-step="rest" data-delta="5">+</button>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <div class="field-label">라운드 수</div>
+        <div class="stepper">
+          <button data-step="rounds" data-delta="-1">−</button>
+          <div class="val" id="roundsVal">5</div>
+          <button data-step="rounds" data-delta="1">+</button>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <div class="field-label">메트로놈 BPM</div>
+        <div class="stepper">
+          <button data-step="bpm" data-delta="-5">−</button>
+          <div class="val" id="bpmVal">120</div>
+          <button data-step="bpm" data-delta="5">+</button>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <div class="row toggle-row" id="voiceToggleRow">
+          <div>
+            <div class="lbl-main">음성 안내</div>
+            <div class="lbl-sub">운동/휴식 전환을 말로 알려줘요</div>
+          </div>
+          <div class="switch on" id="voiceSwitch"><div class="knob"></div></div>
+        </div>
+        <div class="row toggle-row" id="metroToggleRow">
+          <div>
+            <div class="lbl-main">메트로놈</div>
+            <div class="lbl-sub">박자 소리를 내요</div>
+          </div>
+          <div class="switch" id="metroSwitch"><div class="knob"></div></div>
+        </div>
+      </div>
+
+      <div class="total-display">
+        <div class="total-display-lbl">총 운동 시간 (대기시간 제외)</div>
+        <div class="total-display-val" id="totalDisplayVal">2:15</div>
+      </div>
+      <div class="save-hint" id="saveHint"></div>
+    </div>
+
+    <div class="start-wrap">
+      <button id="startBtn">시작</button>
+    </div>
+  </div>
+
+  <!-- RUNNING SCREEN -->
+  <div id="run" class="screen hidden">
+    <div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="row run-header">
+        <span class="round-label" id="roundLabel">ROUND 1/5</span>
+        <button class="icon-btn" id="muteBtn" aria-label="음소거">🔊</button>
+      </div>
+      <div class="phase-label" id="phaseLabel">준비</div>
+      <div class="total-time-label" id="totalTimeLabel"></div>
+    </div>
+    <div class="timer-wrap">
+      <div class="timer-num" id="timerNum">--</div>
+      <div class="next-up" id="nextUp"></div>
+    </div>
+    <div class="row metro-bar">
+      <button class="metro-toggle" id="metroToggleRunBtn" aria-label="메트로놈 켜기/끄기">🥁</button>
+      <div class="bpm-control">
+        <button class="mini-step-btn" id="bpmDownBtn">−</button>
+        <div class="bpm-readout">
+          <div class="bpm-val" id="bpmValRun">120</div>
+          <span class="bpm-unit">BPM</span>
+        </div>
+        <button class="mini-step-btn" id="bpmUpBtn">+</button>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="ctrl-btn" id="pauseBtn">일시정지</button>
+      <button class="ctrl-btn danger" id="stopBtn">종료</button>
+    </div>
+  </div>
+
+  <!-- HISTORY SCREEN -->
+  <div id="history" class="screen hidden">
+    <div class="row">
+      <button class="icon-btn" id="historyBackBtn" aria-label="뒤로">←</button>
+      <span class="settings-title" style="margin-left:6px;">운동 기록</span>
+    </div>
+
+    <div class="segmented" id="rangeSegmented">
+      <button class="seg-btn active" data-range="week">주간</button>
+      <button class="seg-btn" data-range="month">월간</button>
+      <button class="seg-btn" data-range="quarter">분기</button>
+      <button class="seg-btn" data-range="year">연간</button>
+    </div>
+
+    <div class="row hist-nav">
+      <button class="icon-btn" id="histPrevBtn" aria-label="이전">‹</button>
+      <span class="hist-range-label" id="histRangeLabel"></span>
+      <button class="icon-btn" id="histNextBtn" aria-label="다음">›</button>
+    </div>
+
+    <div class="hist-totals" id="histTotals"></div>
+
+    <div class="chart-wrap">
+      <svg id="histChart" width="100%" height="140" preserveAspectRatio="none"></svg>
+    </div>
+
+    <div class="hist-table-wrap">
+      <table class="hist-table">
+        <thead>
+          <tr><th>날짜</th><th>세트</th><th>총시간</th><th>라운드</th></tr>
+        </thead>
+        <tbody id="histTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  // window.storage is a Claude-artifact-only API. Outside that sandbox
+  // (a real browser / installed PWA) it won't exist, so we polyfill the
+  // same interface using localStorage — the app's code doesn't need to
+  // know or care which one is actually backing it.
+  if (!window.storage) {
+    window.storage = {
+      async get(key){
+        const v = localStorage.getItem(key);
+        return v === null ? null : { key, value: v, shared: false };
+      },
+      async set(key, value){
+        localStorage.setItem(key, value);
+        return { key, value, shared: false };
+      },
+      async delete(key){
+        localStorage.removeItem(key);
+        return { key, deleted: true, shared: false };
+      },
+      async list(prefix){
+        const keys = Object.keys(localStorage).filter(k => !prefix || k.startsWith(prefix));
+        return { keys, prefix, shared: false };
+      }
+    };
+  }
+
+  const appEl = document.getElementById('app');
+  const homeEl = document.getElementById('home');
+  const runEl = document.getElementById('run');
+  const historyEl = document.getElementById('history');
+
+  const STORAGE_KEY = 'workout-timer-settings-v1';
+  let settings = { work: 30, rest: 15, rounds: 5, voice: true, metro: false, bpm: 120 };
+
+  function computeTotalSeconds(s){
+    return (s.rounds * s.work) + (Math.max(0, s.rounds - 1) * s.rest);
+  }
+  function formatMMSS(totalSec){
+    totalSec = Math.max(0, Math.round(totalSec));
+    const m = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return `${m}:${String(sec).padStart(2,'0')}`;
+  }
+
+  // ---------- persistence ----------
+  async function loadSettings(){
+    try{
+      const res = await window.storage.get(STORAGE_KEY);
+      if(res && res.value){
+        const parsed = JSON.parse(res.value);
+        settings = Object.assign({}, settings, parsed);
+      }
+    }catch(e){ /* no saved settings yet */ }
+    renderSettingsUI();
+    renderSummary();
+  }
+  let saveTimeout = null;
+  function saveSettings(){
+    window.storage.set(STORAGE_KEY, JSON.stringify(settings), false).then(res=>{
+      const hint = document.getElementById('saveHint');
+      if(res){
+        hint.textContent = '저장됨';
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(()=>{ hint.textContent=''; }, 1200);
+      }
+    }).catch(()=>{});
+  }
+
+  // ---------- workout history ----------
+  const HISTORY_KEY = 'workout-history-log-v1';
+  let historyEntries = [];
+
+  function dateKey(d){
+    const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+  async function loadHistory(){
+    try{
+      const res = await window.storage.get(HISTORY_KEY);
+      if(res && res.value){ historyEntries = JSON.parse(res.value) || []; }
+    }catch(e){ historyEntries = []; }
+  }
+  function saveHistory(){
+    if(historyEntries.length > 400){ historyEntries = historyEntries.slice(historyEntries.length - 400); }
+    window.storage.set(HISTORY_KEY, JSON.stringify(historyEntries), false).catch(()=>{});
+  }
+  function logWorkoutCompletion(){
+    historyEntries.push({
+      date: dateKey(new Date()),
+      ts: Date.now(),
+      work: settings.work,
+      rest: settings.rest,
+      rounds: settings.rounds,
+      totalSeconds: totalWorkoutSeconds
+    });
+    saveHistory();
+  }
+
+  function startOfWeek(d){
+    const nd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const dow = (nd.getDay() + 6) % 7; // Monday = 0
+    nd.setDate(nd.getDate() - dow);
+    return nd;
+  }
+  function addDays(d, n){ const nd = new Date(d); nd.setDate(nd.getDate() + n); return nd; }
+  function addMonths(d, n){ return new Date(d.getFullYear(), d.getMonth() + n, 1); }
+  function startOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
+  function daysInMonth(d){ return new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); }
+  const KOR_WEEKDAY = ['월','화','수','목','금','토','일'];
+
+  // Returns the {start,end} calendar bounds of the whole period being viewed.
+  function getPeriodRange(range, cursor){
+    if(range === 'week'){
+      const s = startOfWeek(cursor);
+      return { start: s, end: addDays(s, 7) };
+    }
+    if(range === 'month'){
+      const s = startOfMonth(cursor);
+      return { start: s, end: addMonths(s, 1) };
+    }
+    if(range === 'quarter'){
+      const qStartMonth = Math.floor(cursor.getMonth() / 3) * 3;
+      const s = new Date(cursor.getFullYear(), qStartMonth, 1);
+      return { start: s, end: new Date(s.getFullYear(), qStartMonth + 3, 1) };
+    }
+    // year
+    const s = new Date(cursor.getFullYear(), 0, 1);
+    return { start: s, end: new Date(cursor.getFullYear() + 1, 0, 1) };
+  }
+
+  // Subdivides the period into display buckets at the right granularity:
+  // week/month -> daily, quarter -> weekly, year -> monthly.
+  function getBuckets(range, start, end){
+    const buckets = [];
+    if(range === 'week' || range === 'month'){
+      let d = new Date(start), i = 0;
+      while(d < end){
+        const wd = (d.getDay() + 6) % 7;
+        buckets.push({
+          start: new Date(d), end: addDays(d,1),
+          axisLabel: range === 'week' ? KOR_WEEKDAY[wd] : (d.getDate() % 5 === 1 ? String(d.getDate()) : ''),
+          tableLabel: `${d.getMonth()+1}/${d.getDate()} (${KOR_WEEKDAY[wd]})`,
+          isToday: dateKey(d) === dateKey(new Date())
+        });
+        d = addDays(d, 1); i++;
+      }
+    } else if(range === 'quarter'){
+      let d = startOfWeek(start);
+      while(d < end){
+        const bStart = d < start ? start : d;
+        const bEndRaw = addDays(d, 7);
+        const bEnd = bEndRaw > end ? end : bEndRaw;
+        const today = new Date();
+        buckets.push({
+          start: bStart, end: bEnd,
+          axisLabel: `${d.getMonth()+1}/${d.getDate()}`,
+          tableLabel: `${d.getMonth()+1}/${d.getDate()}주`,
+          isToday: today >= bStart && today < bEnd
+        });
+        d = addDays(d, 7);
+      }
+    } else { // year
+      for(let m=0;m<12;m++){
+        const bStart = new Date(start.getFullYear(), m, 1);
+        const bEnd = new Date(start.getFullYear(), m+1, 1);
+        const today = new Date();
+        buckets.push({
+          start: bStart, end: bEnd,
+          axisLabel: `${m+1}월`,
+          tableLabel: `${m+1}월`,
+          isToday: today >= bStart && today < bEnd
+        });
+      }
+    }
+    return buckets;
+  }
+
+  function aggregateBucket(bucket){
+    let count = 0, totalSeconds = 0, totalRounds = 0;
+    for(const e of historyEntries){
+      const d = parseDateKey(e.date);
+      if(d >= bucket.start && d < bucket.end){
+        count += 1;
+        totalSeconds += (e.totalSeconds || 0);
+        totalRounds += (e.rounds || 0);
+      }
+    }
+    return { count, totalSeconds, totalRounds };
+  }
+  function parseDateKey(key){
+    const [y,m,d] = key.split('-').map(Number);
+    return new Date(y, m-1, d);
+  }
+
+  let audioCtx = null;
+  function ensureAudio(){
+    if(!audioCtx){
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function beep(freq, dur, vol){
+    try{
+      const ctx = ensureAudio();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      gain.gain.value = 0.0001;
+      osc.connect(gain); gain.connect(ctx.destination);
+      const now = ctx.currentTime;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(vol || 0.2, now + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      osc.start(now);
+      osc.stop(now + dur + 0.02);
+    }catch(e){}
+  }
+  function metroTick(){ beep(1400, 0.06, 0.35); }
+  function chimeWork(){ beep(660, 0.12, 0.25); setTimeout(()=>beep(880,0.14,0.25), 130); }
+  function chimeRest(){ beep(520, 0.16, 0.25); }
+  function chimeDone(){ beep(660,0.1,0.25); setTimeout(()=>beep(880,0.1,0.25),120); setTimeout(()=>beep(1100,0.2,0.25),240); }
+
+  // ---------- metronome (independent BPM-driven scheduler) ----------
+  let metroTimerId = null;
+  function stopMetronome(){
+    if(metroTimerId){ clearInterval(metroTimerId); metroTimerId = null; }
+    document.getElementById('metroToggleRunBtn').classList.remove('on');
+  }
+  function startMetronome(){
+    stopMetronome();
+    if(!settings.metro) return;
+    const periodMs = 60000 / settings.bpm;
+    metroTick();
+    metroTimerId = setInterval(metroTick, periodMs);
+    document.getElementById('metroToggleRunBtn').classList.add('on');
+  }
+  function restartMetronomeIfActive(){
+    if(metroTimerId){ startMetronome(); }
+  }
+  function syncMetronomeToPhase(){
+    if(paused){ stopMetronome(); return; }
+    if(settings.metro && (phase === 'work' || phase === 'rest')){
+      if(!metroTimerId) startMetronome();
+    } else {
+      stopMetronome();
+    }
+  }
+
+  // ---------- voice ----------
+  let voiceEnabled = true;
+  const hasSpeech = typeof window.speechSynthesis !== 'undefined' && window.speechSynthesis;
+  function cancelSpeech(){
+    try{ if(hasSpeech) window.speechSynthesis.cancel(); }catch(e){}
+  }
+  function speak(text){
+    if(!settings.voice || !voiceEnabled || !hasSpeech) return;
+    try{
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR';
+      u.rate = 1.02;
+      window.speechSynthesis.speak(u);
+    }catch(e){}
+  }
+
+  // ---------- settings UI ----------
+  function renderSettingsUI(){
+    document.getElementById('workVal').textContent = settings.work;
+    document.getElementById('restVal').textContent = settings.rest;
+    document.getElementById('roundsVal').textContent = settings.rounds;
+    document.getElementById('bpmVal').textContent = settings.bpm;
+    document.getElementById('voiceSwitch').classList.toggle('on', settings.voice);
+    document.getElementById('metroSwitch').classList.toggle('on', settings.metro);
+    document.getElementById('bpmValRun').textContent = settings.bpm;
+  }
+  function renderSummary(){
+    document.getElementById('totalDisplayVal').textContent = formatMMSS(computeTotalSeconds(settings));
+  }
+
+  document.querySelectorAll('.stepper button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const key = btn.dataset.step;
+      const delta = parseInt(btn.dataset.delta, 10);
+      let v = settings[key] + delta;
+      if(key === 'rounds'){ v = Math.max(1, Math.min(99, v)); }
+      else if(key === 'bpm'){ v = Math.max(40, Math.min(240, v)); }
+      else { v = Math.max(5, Math.min(600, v)); }
+      settings[key] = v;
+      renderSettingsUI();
+      renderSummary();
+      saveSettings();
+      if(key === 'bpm'){ restartMetronomeIfActive(); }
+    });
+  });
+  document.getElementById('voiceSwitch').addEventListener('click', ()=>{
+    settings.voice = !settings.voice;
+    renderSettingsUI();
+    saveSettings();
+  });
+  document.getElementById('metroSwitch').addEventListener('click', ()=>{
+    settings.metro = !settings.metro;
+    renderSettingsUI();
+    saveSettings();
+    syncMetronomeToPhase();
+  });
+
+  function showScreen(name){
+    homeEl.classList.add('hidden');
+    runEl.classList.add('hidden');
+    historyEl.classList.add('hidden');
+    if(name==='home') homeEl.classList.remove('hidden');
+    if(name==='run') runEl.classList.remove('hidden');
+    if(name==='history') historyEl.classList.remove('hidden');
+  }
+
+  // ---------- history screen ----------
+  let histRange = 'week';
+  let histCursor = new Date();
+
+  function histRangeLabel(){
+    const { start, end } = getPeriodRange(histRange, histCursor);
+    const lastDay = addDays(end, -1);
+    if(histRange === 'week'){
+      return `${start.getMonth()+1}/${start.getDate()} – ${lastDay.getMonth()+1}/${lastDay.getDate()}`;
+    }
+    if(histRange === 'month'){
+      return `${start.getFullYear()}년 ${start.getMonth()+1}월`;
+    }
+    if(histRange === 'quarter'){
+      return `${start.getFullYear()}년 ${Math.floor(start.getMonth()/3)+1}분기`;
+    }
+    return `${start.getFullYear()}년`;
+  }
+
+  function renderHistory(){
+    const { start, end } = getPeriodRange(histRange, histCursor);
+    document.getElementById('histRangeLabel').textContent = histRangeLabel();
+
+    const buckets = getBuckets(histRange, start, end);
+    const data = buckets.map(b => Object.assign({}, b, aggregateBucket(b)));
+
+    // totals summary chips
+    const sumSeconds = data.reduce((s,d)=>s+d.totalSeconds,0);
+    const sumSessions = data.reduce((s,d)=>s+d.count,0);
+    const activeUnits = data.filter(d=>d.count>0).length;
+    const activeLabel = histRange === 'year' ? '운동한 달' : (histRange === 'quarter' ? '운동한 주' : '운동한 날');
+    document.getElementById('histTotals').innerHTML = `
+      <div class="stat-chip"><div class="num">${sumSessions}</div><div class="lbl">세트</div></div>
+      <div class="stat-chip"><div class="num">${formatMMSS(sumSeconds)}</div><div class="lbl">총 시간</div></div>
+      <div class="stat-chip"><div class="num">${activeUnits}</div><div class="lbl">${activeLabel}</div></div>
+    `;
+
+    renderLineChart(data);
+
+    // table
+    const tbody = document.getElementById('histTableBody');
+    tbody.innerHTML = data.slice().reverse().map(d=>{
+      const rowClass = d.count===0 ? 'empty-day' : (d.isToday ? 'today-row' : '');
+      return `<tr class="${rowClass}">
+        <td class="date-cell">${d.tableLabel}</td>
+        <td>${d.count}</td>
+        <td>${d.count>0 ? formatMMSS(d.totalSeconds) : '-'}</td>
+        <td>${d.count>0 ? d.totalRounds : '-'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Draws a line graph. Uses the SVG's real rendered pixel size for the
+  // viewBox so coordinates map 1:1 to screen pixels — this is what keeps
+  // circles/lines/text from looking stretched or squished.
+  function renderLineChart(data){
+    const svg = document.getElementById('histChart');
+    const rect = svg.getBoundingClientRect();
+    const chartW = Math.max(rect.width, 240);
+    const chartH = 140;
+    svg.setAttribute('viewBox', `0 0 ${chartW} ${chartH}`);
+
+    const n = data.length;
+    const padLeft = 8, padRight = 8;
+    const plotTop = 14, labelH = 20;
+    const plotBottom = chartH - labelH;
+    const plotH = plotBottom - plotTop;
+    const usableW = chartW - padLeft - padRight;
+    const stepX = n > 1 ? usableW / (n - 1) : 0;
+
+    const minutesArr = data.map(d => d.totalSeconds/60);
+    const maxMinutes = Math.max(1, ...minutesArr);
+
+    const points = data.map((d,i)=>{
+      const x = padLeft + (n>1 ? i*stepX : usableW/2);
+      const y = plotBottom - (minutesArr[i]/maxMinutes)*plotH;
+      return { x, y, d };
+    });
+
+    const linePath = points.map((p,i)=> (i===0?'M':'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+    const areaPath = linePath +
+      ` L${points[points.length-1].x.toFixed(1)},${plotBottom} L${points[0].x.toFixed(1)},${plotBottom} Z`;
+
+    let svgContent = `
+      <defs>
+        <linearGradient id="histAreaFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--rest)" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="var(--rest)" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d="${areaPath}" fill="url(#histAreaFill)" stroke="none"></path>
+      <path d="${linePath}" fill="none" stroke="var(--rest)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>
+    `;
+
+    points.forEach(p=>{
+      const r = p.d.isToday ? 3.4 : 2.4;
+      const fill = p.d.count>0 ? 'var(--rest)' : 'var(--surface-2)';
+      svgContent += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="${fill}" stroke="var(--bg)" stroke-width="1"></circle>`;
+      if(p.d.axisLabel){
+        svgContent += `<text x="${p.x.toFixed(1)}" y="${chartH-5}" font-size="10" fill="var(--muted)" text-anchor="middle" font-family="Barlow Condensed">${p.d.axisLabel}</text>`;
+      }
+    });
+
+    svg.innerHTML = svgContent;
+  }
+
+  document.getElementById('historyOpenBtn').addEventListener('click', ()=>{
+    histCursor = new Date();
+    showScreen('history');
+    renderHistory();
+  });
+  document.getElementById('historyBackBtn').addEventListener('click', ()=>showScreen('home'));
+  document.querySelectorAll('#rangeSegmented .seg-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      histRange = btn.dataset.range;
+      document.querySelectorAll('#rangeSegmented .seg-btn').forEach(b=>b.classList.toggle('active', b===btn));
+      renderHistory();
+    });
+  });
+  document.getElementById('histPrevBtn').addEventListener('click', ()=>{
+    if(histRange === 'week') histCursor = addDays(histCursor, -7);
+    else if(histRange === 'month') histCursor = addMonths(histCursor, -1);
+    else if(histRange === 'quarter') histCursor = addMonths(histCursor, -3);
+    else histCursor = new Date(histCursor.getFullYear()-1, histCursor.getMonth(), 1);
+    renderHistory();
+  });
+  document.getElementById('histNextBtn').addEventListener('click', ()=>{
+    if(histRange === 'week') histCursor = addDays(histCursor, 7);
+    else if(histRange === 'month') histCursor = addMonths(histCursor, 1);
+    else if(histRange === 'quarter') histCursor = addMonths(histCursor, 3);
+    else histCursor = new Date(histCursor.getFullYear()+1, histCursor.getMonth(), 1);
+    renderHistory();
+  });
+
+
+  // ---------- timer engine ----------
+  // phases: 'prep' | 'work' | 'rest' | 'done'
+  let phase = 'prep';
+  let remaining = 0;
+  let phaseTotal = 0;
+  let currentRound = 1;
+  let totalRounds = 5;
+  let intervalId = null;
+  let paused = false;
+  let elapsedSeconds = 0;
+  let totalWorkoutSeconds = 0;
+
+  const timerNumEl = document.getElementById('timerNum');
+  const phaseLabelEl = document.getElementById('phaseLabel');
+  const roundLabelEl = document.getElementById('roundLabel');
+  const nextUpEl = document.getElementById('nextUp');
+  const progressFillEl = document.getElementById('progressFill');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const muteBtn = document.getElementById('muteBtn');
+
+  function setAppBg(color){
+    appEl.style.backgroundColor = color;
+  }
+
+  function updateDisplay(){
+    timerNumEl.textContent = remaining;
+    roundLabelEl.textContent = `ROUND ${currentRound}/${totalRounds}`;
+    const frac = phaseTotal ? (remaining / phaseTotal) : 0;
+    progressFillEl.style.transform = `scaleX(${Math.max(0,Math.min(1,frac))})`;
+    document.getElementById('totalTimeLabel').textContent =
+      `${formatMMSS(elapsedSeconds)} / ${formatMMSS(totalWorkoutSeconds)}`;
+
+    if(phase === 'prep'){
+      phaseLabelEl.textContent = '준비';
+      phaseLabelEl.style.color = 'var(--text)';
+      progressFillEl.style.backgroundColor = 'var(--text)';
+      setAppBg('var(--bg)');
+      nextUpEl.textContent = '곧 운동이 시작돼요';
+    } else if(phase === 'work'){
+      phaseLabelEl.textContent = '운동';
+      phaseLabelEl.style.color = 'var(--work)';
+      progressFillEl.style.backgroundColor = 'var(--work)';
+      setAppBg('var(--work-deep)');
+      nextUpEl.textContent = currentRound < totalRounds ? '다음: 휴식' : '다음: 마지막 휴식';
+    } else if(phase === 'rest'){
+      phaseLabelEl.textContent = '휴식';
+      phaseLabelEl.style.color = 'var(--rest)';
+      progressFillEl.style.backgroundColor = 'var(--rest)';
+      setAppBg('var(--rest-deep)');
+      nextUpEl.textContent = currentRound < totalRounds ? `다음: 라운드 ${currentRound+1} 운동` : '마지막 라운드예요';
+    } else if(phase === 'done'){
+      phaseLabelEl.textContent = '완료';
+      phaseLabelEl.style.color = 'var(--text)';
+      progressFillEl.style.backgroundColor = 'var(--text)';
+      setAppBg('var(--bg)');
+      nextUpEl.textContent = '수고하셨습니다';
+    }
+  }
+
+  function startPhase(nextPhase){
+    phase = nextPhase;
+    if(phase === 'work'){
+      remaining = settings.work; phaseTotal = settings.work;
+      chimeWork(); speak('운동 시작');
+    } else if(phase === 'rest'){
+      remaining = settings.rest; phaseTotal = settings.rest;
+      chimeRest(); speak('휴식');
+    } else if(phase === 'prep'){
+      remaining = 3; phaseTotal = 3;
+      speak('준비하세요');
+    } else if(phase === 'done'){
+      chimeDone(); speak('운동을 종료합니다. 수고하셨습니다');
+      logWorkoutCompletion();
+    }
+    syncMetronomeToPhase();
+    updateDisplay();
+  }
+
+  function tickSecond(){
+    if(paused) return;
+
+    if(phase !== 'done'){
+      if(remaining <= 3 && remaining > 0){
+        speak(String(remaining));
+      }
+    }
+
+    if(phase !== 'prep' && phase !== 'done'){ elapsedSeconds += 1; }
+    remaining -= 1;
+
+    if(remaining < 0){
+      // transition
+      if(phase === 'prep'){
+        startPhase('work');
+      } else if(phase === 'work'){
+        if(currentRound >= totalRounds){
+          startPhase('done');
+        } else {
+          startPhase('rest');
+        }
+      } else if(phase === 'rest'){
+        currentRound += 1;
+        startPhase('work');
+      }
+      return;
+    }
+
+    if(phase === 'done'){
+      clearInterval(intervalId);
+      intervalId = null;
+      stopMetronome();
+      setTimeout(()=>{ showScreen('home'); renderSummary(); }, 2500);
+      return;
+    }
+
+    updateDisplay();
+  }
+
+  function beginWorkout(){
+    ensureAudio();
+    totalRounds = settings.rounds;
+    currentRound = 1;
+    paused = false;
+    elapsedSeconds = 0;
+    totalWorkoutSeconds = computeTotalSeconds(settings);
+    pauseBtn.textContent = '일시정지';
+    showScreen('run');
+    startPhase('prep');
+    if(intervalId) clearInterval(intervalId);
+    intervalId = setInterval(tickSecond, 1000);
+  }
+
+  document.getElementById('startBtn').addEventListener('click', beginWorkout);
+
+  pauseBtn.addEventListener('click', ()=>{
+    paused = !paused;
+    pauseBtn.textContent = paused ? '계속하기' : '일시정지';
+    if(paused){ cancelSpeech(); }
+    syncMetronomeToPhase();
+  });
+
+  document.getElementById('stopBtn').addEventListener('click', ()=>{
+    if(intervalId){ clearInterval(intervalId); intervalId = null; }
+    cancelSpeech();
+    stopMetronome();
+    showScreen('home');
+    renderSummary();
+  });
+
+  muteBtn.addEventListener('click', ()=>{
+    voiceEnabled = !voiceEnabled;
+    muteBtn.textContent = voiceEnabled ? '🔊' : '🔇';
+    if(!voiceEnabled) cancelSpeech();
+  });
+
+  document.getElementById('metroToggleRunBtn').addEventListener('click', ()=>{
+    settings.metro = !settings.metro;
+    renderSettingsUI();
+    saveSettings();
+    syncMetronomeToPhase();
+  });
+  document.getElementById('bpmDownBtn').addEventListener('click', ()=>{
+    settings.bpm = Math.max(40, settings.bpm - 5);
+    renderSettingsUI();
+    saveSettings();
+    restartMetronomeIfActive();
+  });
+  document.getElementById('bpmUpBtn').addEventListener('click', ()=>{
+    settings.bpm = Math.min(240, settings.bpm + 5);
+    renderSettingsUI();
+    saveSettings();
+    restartMetronomeIfActive();
+  });
+
+  loadSettings();
+  loadHistory();
+})();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
